@@ -1,0 +1,30 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Users: can read own profile, technicians readable by all logged-in users
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Reports: user can create, owner and assigned tech can read/update
+    match /reports/{reportId} {
+      allow create: if request.auth != null;
+      allow read: if request.auth != null &&
+        (resource.data.userId == request.auth.uid ||
+         resource.data.techId == request.auth.uid);
+      allow update: if request.auth != null &&
+        (resource.data.userId == request.auth.uid ||
+         resource.data.techId == request.auth.uid);
+    }
+
+    // Reviews: anyone logged in can read, owner can create
+    match /reviews/{reviewId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+    }
+  }
+}

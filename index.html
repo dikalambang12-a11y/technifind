@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TechniFind — Teknisi Internet Terdekat</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔧</text></svg>">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <link rel="stylesheet" href="src/style.css" />
+</head>
+<body>
+
+<!-- ░░░░ TOAST ░░░░ -->
+<div id="toast" class="toast"></div>
+
+<!-- ░░░░ APP SHELL ░░░░ -->
+<div class="app" id="app">
+
+  <!-- ══ AUTH SCREEN ══ -->
+  <div class="screen active" id="screen-auth">
+    <div class="auth-bg">
+      <div class="auth-orb orb1"></div>
+      <div class="auth-orb orb2"></div>
+    </div>
+    <div class="auth-content">
+      <div class="auth-logo">Techni<span>Find</span></div>
+      <p class="auth-tagline">Temukan Teknisi Internet<br>Terdekat di Sekitar Anda</p>
+      <div class="auth-tabs">
+        <button class="tab-btn active" onclick="switchAuthTab('login')">Masuk</button>
+        <button class="tab-btn" onclick="switchAuthTab('register')">Daftar</button>
+      </div>
+
+      <!-- LOGIN -->
+      <div id="auth-login" class="auth-form active">
+        <div class="field-group">
+          <label>Email</label>
+          <input type="email" id="login-email" placeholder="email@sekolah.com" />
+        </div>
+        <div class="field-group">
+          <label>Password</label>
+          <input type="password" id="login-pass" placeholder="••••••••" />
+        </div>
+        <button class="btn-primary" onclick="loginUser()">Masuk</button>
+        <div class="or-divider"><span>atau</span></div>
+        <button class="btn-google" onclick="loginGoogle()">
+          <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+          Masuk dengan Google
+        </button>
+      </div>
+
+      <!-- REGISTER -->
+      <div id="auth-register" class="auth-form">
+        <div class="role-select">
+          <div class="role-card active" id="role-user" onclick="selectRole('user')">
+            <div class="role-icon">👩‍🏫</div>
+            <div class="role-label">Guru / Staff</div>
+          </div>
+          <div class="role-card" id="role-tech" onclick="selectRole('tech')">
+            <div class="role-icon">🔧</div>
+            <div class="role-label">Teknisi</div>
+          </div>
+        </div>
+        <div class="field-group">
+          <label>Nama Lengkap</label>
+          <input type="text" id="reg-name" placeholder="Nama lengkap" />
+        </div>
+        <div class="field-group">
+          <label>Email</label>
+          <input type="email" id="reg-email" placeholder="email@sekolah.com" />
+        </div>
+        <div class="field-group">
+          <label>No. WhatsApp</label>
+          <input type="tel" id="reg-wa" placeholder="08xxxxxxxxxx" />
+        </div>
+        <div class="field-group" id="field-speciality" style="display:none">
+          <label>Keahlian</label>
+          <select id="reg-spec">
+            <option value="">Pilih keahlian...</option>
+            <option>Fiber Optic</option>
+            <option>WiFi & Wireless</option>
+            <option>Router & Switch</option>
+            <option>ISP Specialist</option>
+            <option>LAN & Cabling</option>
+            <option>Umum (semua jaringan)</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <label>Password</label>
+          <input type="password" id="reg-pass" placeholder="Min. 6 karakter" />
+        </div>
+        <button class="btn-primary" onclick="registerUser()">Buat Akun</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ HOME SCREEN (USER) ══ -->
+  <div class="screen" id="screen-home">
+    <div class="top-bar">
+      <div>
+        <div class="top-logo">Techni<span>Find</span></div>
+        <div class="top-sub" id="home-greeting">Selamat datang 👋</div>
+      </div>
+      <div class="avatar-btn" onclick="goProfile()" id="user-avatar-btn">👩‍🏫</div>
+    </div>
+
+    <div class="location-pill" id="location-pill" onclick="detectLocation()">
+      <span>📍</span>
+      <span id="location-text">Deteksi lokasi Anda...</span>
+      <span class="loc-refresh">↻</span>
+    </div>
+
+    <div class="hero-section">
+      <h1 class="hero-title">Koneksi Internet<br><em>Bermasalah?</em></h1>
+      <p class="hero-sub">Temukan teknisi terpercaya di sekitar Anda dalam hitungan detik.</p>
+    </div>
+
+    <div class="quick-actions">
+      <button class="qa-btn primary" onclick="goSearch()">
+        🔍 Cari Teknisi
+      </button>
+      <button class="qa-btn danger" onclick="goSearch('darurat')">
+        🚨 Darurat
+      </button>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat-pill"><span id="stat-online">—</span> teknisi online</div>
+      <div class="stat-pill">rata-rata <span id="stat-eta">—</span> mnt tiba</div>
+    </div>
+
+    <div class="section-head">
+      <h2>Teknisi Terdekat</h2>
+      <a onclick="goSearch()">Semua →</a>
+    </div>
+
+    <div id="nearby-list" class="tech-list">
+      <div class="skeleton-card"></div>
+      <div class="skeleton-card"></div>
+    </div>
+
+    <div class="bottom-nav">
+      <div class="nav-item active" onclick="goHome()">🏠<span>Beranda</span></div>
+      <div class="nav-item" onclick="goSearch()">🔍<span>Cari</span></div>
+      <div class="nav-item" onclick="goHistory()">📋<span>Riwayat</span></div>
+      <div class="nav-item" onclick="goProfile()">👤<span>Profil</span></div>
+    </div>
+  </div>
+
+  <!-- ══ SEARCH SCREEN ══ -->
+  <div class="screen" id="screen-search">
+    <div class="search-bar">
+      <button class="back-btn" onclick="goHome()">←</button>
+      <input id="search-input" type="text" placeholder="Cari nama atau keahlian..." oninput="filterSearch(this.value)" />
+    </div>
+
+    <div class="chips-row">
+      <div class="chip active" onclick="chipFilter(this,'')">Semua</div>
+      <div class="chip" onclick="chipFilter(this,'online')">🟢 Online</div>
+      <div class="chip" onclick="chipFilter(this,'Fiber Optic')">Fiber</div>
+      <div class="chip" onclick="chipFilter(this,'WiFi')">WiFi</div>
+      <div class="chip" onclick="chipFilter(this,'Router')">Router</div>
+      <div class="chip" onclick="chipFilter(this,'ISP')">ISP</div>
+    </div>
+
+    <div id="search-list" class="tech-list" style="padding-bottom:80px">
+      <div class="empty-state" id="search-loading">
+        <div class="radar-anim"></div>
+        <p>Mencari teknisi di sekitar Anda...</p>
+      </div>
+    </div>
+
+    <div class="bottom-nav">
+      <div class="nav-item" onclick="goHome()">🏠<span>Beranda</span></div>
+      <div class="nav-item active" onclick="goSearch()">🔍<span>Cari</span></div>
+      <div class="nav-item" onclick="goHistory()">📋<span>Riwayat</span></div>
+      <div class="nav-item" onclick="goProfile()">👤<span>Profil</span></div>
+    </div>
+  </div>
+
+  <!-- ══ DETAIL SCREEN ══ -->
+  <div class="screen" id="screen-detail">
+    <div class="detail-top-bar">
+      <button class="back-btn" id="detail-back-btn">←</button>
+      <span>Detail Teknisi</span>
+      <div style="width:36px"></div>
+    </div>
+
+    <div class="scroll-body">
+      <div id="detail-map" style="height:200px;width:100%;border-radius:0"></div>
+
+      <div class="detail-card">
+        <div class="detail-head">
+          <div class="detail-avatar" id="d-emoji">🔧</div>
+          <div class="detail-info">
+            <div class="detail-name" id="d-name">—</div>
+            <div class="detail-spec" id="d-spec">—</div>
+            <div class="detail-badges">
+              <span class="badge green" id="d-status-badge">● Online</span>
+              <span class="badge blue" id="d-eta-badge">⚡ — mnt</span>
+              <span class="badge gray" id="d-dist-badge">📍 — km</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="detail-stats">
+          <div class="ds"><div class="ds-val" id="d-rating">—</div><div class="ds-key">Rating</div></div>
+          <div class="ds"><div class="ds-val" id="d-jobs">—</div><div class="ds-key">Selesai</div></div>
+          <div class="ds"><div class="ds-val" id="d-dist2">—</div><div class="ds-key">Jarak</div></div>
+        </div>
+
+        <div class="action-row">
+          <button class="btn-wa" id="btn-wa">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.118 1.528 5.855L.057 23.886a.5.5 0 00.611.611l6.031-1.471A11.946 11.946 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.885 0-3.65-.502-5.177-1.378l-.371-.215-3.839.936.952-3.837-.232-.384A9.96 9.96 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>
+            Hubungi via WhatsApp
+          </button>
+        </div>
+        <div class="action-row" style="margin-top:8px">
+          <button class="btn-report" onclick="openReport()">📋 Buat Laporan Gangguan</button>
+        </div>
+      </div>
+
+      <div class="reviews-section">
+        <h3>Ulasan Pengguna</h3>
+        <div id="reviews-list"><p class="muted-text">Belum ada ulasan.</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ REPORT MODAL ══ -->
+  <div class="modal-overlay" id="report-modal">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h3>📋 Laporan Gangguan</h3>
+        <button onclick="closeReport()">✕</button>
+      </div>
+      <div class="field-group">
+        <label>Jenis Gangguan</label>
+        <select id="rep-type">
+          <option>Internet lambat / tidak stabil</option>
+          <option>WiFi putus total</option>
+          <option>Router tidak berfungsi</option>
+          <option>Kabel LAN rusak</option>
+          <option>DNS / IP bermasalah</option>
+          <option>Lainnya</option>
+        </select>
+      </div>
+      <div class="field-group">
+        <label>Keterangan</label>
+        <textarea id="rep-desc" placeholder="Ceritakan masalah internet Anda..." rows="3"></textarea>
+      </div>
+      <div class="field-group">
+        <label>Prioritas</label>
+        <div style="display:flex;gap:8px">
+          <label class="radio-opt"><input type="radio" name="priority" value="normal" checked> Normal</label>
+          <label class="radio-opt"><input type="radio" name="priority" value="urgent"> 🚨 Darurat</label>
+        </div>
+      </div>
+      <button class="btn-primary" onclick="submitReport()">Kirim Laporan</button>
+    </div>
+  </div>
+
+  <!-- ══ HISTORY SCREEN ══ -->
+  <div class="screen" id="screen-history">
+    <div class="top-bar">
+      <div class="top-logo">Riwayat</div>
+    </div>
+    <div id="history-list" class="history-list" style="padding-bottom:80px">
+      <div class="empty-state"><p>Memuat riwayat...</p></div>
+    </div>
+    <div class="bottom-nav">
+      <div class="nav-item" onclick="goHome()">🏠<span>Beranda</span></div>
+      <div class="nav-item" onclick="goSearch()">🔍<span>Cari</span></div>
+      <div class="nav-item active" onclick="goHistory()">📋<span>Riwayat</span></div>
+      <div class="nav-item" onclick="goProfile()">👤<span>Profil</span></div>
+    </div>
+  </div>
+
+  <!-- ══ TECHNICIAN DASHBOARD ══ -->
+  <div class="screen" id="screen-tech-dashboard">
+    <div class="top-bar">
+      <div>
+        <div class="top-logo">Dashboard <span>Teknisi</span></div>
+        <div class="top-sub" id="tech-greeting">Halo!</div>
+      </div>
+      <div class="avatar-btn" onclick="goProfile()">🔧</div>
+    </div>
+
+    <div class="online-toggle-card">
+      <div>
+        <div class="ot-title">Status Ketersediaan</div>
+        <div class="ot-sub" id="ot-sub-text">Anda saat ini <strong>Offline</strong></div>
+      </div>
+      <label class="toggle-switch">
+        <input type="checkbox" id="online-toggle" onchange="toggleOnlineStatus(this.checked)">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+
+    <div class="stats-row" style="margin:0 16px">
+      <div class="stat-pill">⭐ <span id="tech-rating-display">—</span></div>
+      <div class="stat-pill">✅ <span id="tech-jobs-display">—</span> selesai</div>
+    </div>
+
+    <div class="section-head" style="margin-top:16px">
+      <h2>Laporan Masuk</h2>
+    </div>
+    <div id="incoming-reports" class="tech-list" style="padding-bottom:80px">
+      <div class="empty-state"><p>Belum ada laporan masuk.</p></div>
+    </div>
+
+    <div class="bottom-nav">
+      <div class="nav-item active">🏠<span>Dashboard</span></div>
+      <div class="nav-item" onclick="goProfile()">👤<span>Profil</span></div>
+    </div>
+  </div>
+
+  <!-- ══ PROFILE SCREEN ══ -->
+  <div class="screen" id="screen-profile">
+    <div class="top-bar">
+      <button class="back-btn" id="profile-back">←</button>
+      <div class="top-logo">Profil</div>
+      <div style="width:36px"></div>
+    </div>
+    <div class="profile-body">
+      <div class="profile-hero">
+        <div class="profile-avatar" id="profile-ava">👩‍🏫</div>
+        <div class="profile-name" id="profile-name">—</div>
+        <div class="profile-role" id="profile-role">—</div>
+      </div>
+      <div class="menu-list">
+        <div class="menu-item" onclick="logout()">
+          <span>🚪</span><span class="menu-label">Keluar</span><span>›</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /app -->
+
+<!-- Firebase SDKs -->
+<script type="module" src="src/firebase-config.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script type="module" src="src/app.js"></script>
+
+</body>
+</html>
