@@ -1,7 +1,3 @@
-// ═══════════════════════════════════════════
-//   TECHNIFIND — MAIN APPLICATION LOGIC
-// ═══════════════════════════════════════════
-
 import { auth, db } from './firebase-config.js';
 import {
   createUserWithEmailAndPassword,
@@ -30,7 +26,7 @@ let currentFilter = '';
 let selectedRole = 'user';
 
 // ─── UTILS ───
-function toast(msg, duration = 3000) {
+function toast(msg, duration = 3500) {
   const el = document.getElementById('toast');
   el.textContent = msg;
   el.classList.add('show');
@@ -52,7 +48,6 @@ function haversine(lat1, lon1, lat2, lon2) {
 }
 
 function etaMinutes(distKm) {
-  // Assume average 30 km/h in city
   return Math.round((distKm / 30) * 60);
 }
 
@@ -64,6 +59,25 @@ function buildWaLink(phone, techName, userName, schoolName) {
     `Apakah Anda tersedia untuk membantu kami sekarang? 🙏`
   );
   return `https://wa.me/${clean}?text=${msg}`;
+}
+
+function escHtml(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function friendlyError(code) {
+  const map = {
+    'auth/user-not-found': 'Email tidak ditemukan. Coba daftar dulu.',
+    'auth/wrong-password': 'Password salah. Coba lagi.',
+    'auth/invalid-credential': 'Email atau password salah.',
+    'auth/email-already-in-use': 'Email sudah terdaftar. Coba masuk.',
+    'auth/invalid-email': 'Format email tidak valid.',
+    'auth/weak-password': 'Password minimal 6 karakter.',
+    'auth/popup-closed-by-user': 'Login Google dibatalkan.',
+    'auth/popup-blocked': 'Popup diblokir browser. Izinkan popup untuk situs ini.',
+    'auth/network-request-failed': 'Tidak ada koneksi internet.',
+  };
+  return map[code] || `Terjadi kesalahan (${code}). Coba lagi.`;
 }
 
 // ─── AUTH ───
@@ -85,6 +99,7 @@ window.loginUser = async function() {
   const email = document.getElementById('login-email').value.trim();
   const pass  = document.getElementById('login-pass').value;
   if (!email || !pass) return toast('⚠️ Isi email dan password terlebih dahulu.');
+  toast('⏳ Sedang masuk...');
   try {
     await signInWithEmailAndPassword(auth, email, pass);
   } catch (e) {
@@ -93,14 +108,14 @@ window.loginUser = async function() {
 };
 
 window.loginGoogle = async function() {
+  toast('⏳ Membuka Google login...');
   try {
     const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
     const result = await signInWithPopup(auth, provider);
     const user = result.user;
-    // Check if profile exists
     const snap = await getDoc(doc(db, 'users', user.uid));
     if (!snap.exists()) {
-      // New google user — save as 'user' role by default
       await setDoc(doc(db, 'users', user.uid), {
         name: user.displayName || 'Pengguna',
         email: user.email,
@@ -125,6 +140,7 @@ window.registerUser = async function() {
   if (selectedRole === 'tech' && !spec) return toast('⚠️ Pilih keahlian teknisi.');
   if (pass.length < 6) return toast('⚠️ Password minimal 6 karakter.');
 
+  toast('⏳ Membuat akun...');
   try {
     const cred = await createUserWithEmailAndPassword(auth, email, pass);
     const uid = cred.user.uid;
@@ -140,7 +156,7 @@ window.registerUser = async function() {
       });
     }
     await setDoc(doc(db, 'users', uid), base);
-    toast('✅ Akun berhasil dibuat!');
+    toast('✅ Akun berhasil dibuat! Selamat datang ' + name + '!');
   } catch (e) {
     toast('❌ ' + friendlyError(e.code));
   }
@@ -153,31 +169,35 @@ window.logout = async function() {
   showScreen('auth');
 };
 
-function friendlyError(code) {
-  const map = {
-    'auth/user-not-found': 'Akun tidak ditemukan.',
-    'auth/wrong-password': 'Password salah.',
-    'auth/email-already-in-use': 'Email sudah digunakan.',
-    'auth/invalid-email': 'Format email tidak valid.',
-    'auth/weak-password': 'Password terlalu lemah.',
-    'auth/popup-closed-by-user': 'Login dibatalkan.',
-    'auth/invalid-credential': 'Email atau password salah.',
-  };
-  return map[code] || 'Terjadi kesalahan. Coba lagi.';
-}
-
 // ─── AUTH STATE ───
 onAuthStateChanged(auth, async (user) => {
   if (user) {
     currentUser = user;
-    const snap = await getDoc(doc(db, 'users', user.uid));
-    if (snap.exists()) {
-      currentUserData = snap.data();
-      if (currentUserData.role === 'tech') {
-        initTechDashboard();
+    try {
+      const snap = await getDoc(doc(db, 'users', user.uid));
+      if (snap.exists()) {
+        currentUserData = snap.data();
+        if (currentUserData.role === 'tech') {
+          initTechDashboard();
+        } else {
+          initUserHome();
+        }
       } else {
+        // User exists in Auth but not in Firestore (Google login first time)
+        currentUserData = {
+          name: user.displayName || user.email,
+          email: user.email,
+          role: 'user',
+          whatsapp: ''
+        };
+        await setDoc(doc(db, 'users', user.uid), {
+          ...currentUserData,
+          createdAt: serverTimestamp()
+        });
         initUserHome();
       }
+    } catch(e) {
+      toast('❌ Gagal memuat profil: ' + e.message);
     }
   } else {
     showScreen('auth');
@@ -190,6 +210,7 @@ window.detectLocation = function() {
   el.textContent = 'Mendeteksi lokasi...';
   if (!navigator.geolocation) {
     el.textContent = 'Geolokasi tidak didukung.';
+    setDefaultLocation();
     return;
   }
   navigator.geolocation.getCurrentPosition(
@@ -206,67 +227,75 @@ window.detectLocation = function() {
       }
       loadNearbyTechs();
     },
-    err => {
-      // Fallback: use Pemalang, Central Java coords
-      userLat = -6.8924;
-      userLng = 109.3753;
-      el.textContent = 'Pemalang, Jawa Tengah (default)';
+    () => {
+      setDefaultLocation();
       loadNearbyTechs();
-    }
+    },
+    { timeout: 8000 }
   );
 };
+
+function setDefaultLocation() {
+  userLat = -6.8924;
+  userLng = 109.3753;
+  const el = document.getElementById('location-text');
+  if (el) el.textContent = 'Pemalang, Jawa Tengah';
+}
 
 // ─── USER HOME ───
 function initUserHome() {
   showScreen('home');
   document.getElementById('home-greeting').textContent =
     'Halo, ' + (currentUserData?.name?.split(' ')[0] || 'Pengguna') + ' 👋';
-  document.getElementById('user-avatar-btn').textContent =
-    currentUserData?.role === 'tech' ? '🔧' : '👩‍🏫';
   document.getElementById('profile-back').onclick = goHome;
   detectLocation();
 }
 
-// ─── LOAD NEARBY TECHNICIANS ───
+// ─── LOAD TECHNICIANS ───
 async function loadNearbyTechs() {
   allTechnicians = [];
-  const q = query(collection(db, 'users'), where('role', '==', 'tech'));
-  const snap = await getDocs(q);
-  snap.forEach(docSnap => {
-    const d = docSnap.data();
-    let dist = null;
-    let eta  = null;
-    if (d.lat && d.lng && userLat && userLng) {
-      dist = haversine(userLat, userLng, d.lat, d.lng);
-      eta  = etaMinutes(dist);
-    }
-    allTechnicians.push({ id: docSnap.id, ...d, dist, eta });
-  });
+  try {
+    // Simple query - no orderBy to avoid index requirement
+    const q = query(collection(db, 'users'), where('role', '==', 'tech'));
+    const snap = await getDocs(q);
+    snap.forEach(docSnap => {
+      const d = docSnap.data();
+      let dist = null;
+      let eta  = null;
+      if (d.lat && d.lng && userLat && userLng) {
+        dist = haversine(userLat, userLng, d.lat, d.lng);
+        eta  = etaMinutes(dist);
+      }
+      allTechnicians.push({ id: docSnap.id, ...d, dist, eta });
+    });
 
-  // Sort by distance (online first, then by distance)
-  allTechnicians.sort((a, b) => {
-    if (a.isOnline && !b.isOnline) return -1;
-    if (!a.isOnline && b.isOnline) return 1;
-    if (a.dist !== null && b.dist !== null) return a.dist - b.dist;
-    return 0;
-  });
+    // Sort in JS instead of Firestore (avoids index issues)
+    allTechnicians.sort((a, b) => {
+      if (a.isOnline && !b.isOnline) return -1;
+      if (!a.isOnline && b.isOnline) return 1;
+      if (a.dist !== null && b.dist !== null) return a.dist - b.dist;
+      return 0;
+    });
 
-  // Stats
-  const onlineCount = allTechnicians.filter(t => t.isOnline).length;
-  document.getElementById('stat-online').textContent = onlineCount;
-  const etaArr = allTechnicians.filter(t => t.eta !== null).map(t => t.eta);
-  document.getElementById('stat-eta').textContent =
-    etaArr.length ? Math.round(etaArr.reduce((a,b)=>a+b,0)/etaArr.length) : '—';
+    const onlineCount = allTechnicians.filter(t => t.isOnline).length;
+    document.getElementById('stat-online').textContent = onlineCount;
+    const etaArr = allTechnicians.filter(t => t.eta !== null).map(t => t.eta);
+    document.getElementById('stat-eta').textContent =
+      etaArr.length ? Math.round(etaArr.reduce((a,b)=>a+b,0)/etaArr.length) : '—';
 
-  renderNearbyList(allTechnicians.slice(0, 3));
+    renderNearbyList(allTechnicians.slice(0, 3));
+  } catch(e) {
+    document.getElementById('nearby-list').innerHTML =
+      `<div class="empty-state"><p>Gagal memuat teknisi: ${e.message}</p></div>`;
+  }
 }
 
 function renderNearbyList(techs) {
   const el = document.getElementById('nearby-list');
   if (!techs.length) {
     el.innerHTML = `<div class="empty-state">
-      <p>Belum ada teknisi terdaftar di sekitar Anda.<br>
-      <small>Ajak teknisi internet di daerah Anda untuk daftar!</small></p>
+      <p>Belum ada teknisi terdaftar.<br>
+      <small>Ajak teknisi internet di daerah kamu untuk daftar!</small></p>
     </div>`;
     return;
   }
@@ -307,31 +336,21 @@ function techCardHTML(t) {
     </div>`;
 }
 
-function escHtml(s) {
-  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
 // ─── NAVIGATION ───
 window.goHome = function() {
   if (currentUserData?.role === 'tech') { initTechDashboard(); return; }
   showScreen('home');
-  setActiveNav('home');
 };
 
 window.goSearch = function(mode) {
   showScreen('search');
-  setActiveNav('search');
   renderSearchResults(allTechnicians, '');
   document.getElementById('search-input').value = '';
-  if (mode === 'darurat') {
-    toast('🚨 Mode Darurat aktif — cari teknisi segera!');
-    document.getElementById('search-input').placeholder = '🚨 Cari teknisi darurat...';
-  }
+  if (mode === 'darurat') toast('🚨 Mode Darurat — cari teknisi segera!');
 };
 
 window.goHistory = function() {
   showScreen('history');
-  setActiveNav('history');
   loadHistory();
 };
 
@@ -341,18 +360,6 @@ window.goProfile = function() {
   document.getElementById('profile-role').textContent =
     currentUserData?.role === 'tech' ? '🔧 Teknisi Internet' : '👩‍🏫 Guru / Staff Sekolah';
 };
-
-function setActiveNav(active) {
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  // find the right nav item per screen
-  const map = { home: 0, search: 1, history: 2, profile: 3 };
-  const screen = document.getElementById('screen-' + active);
-  if (screen) {
-    const navItems = screen.querySelectorAll('.nav-item');
-    const idx = map[active] ?? 0;
-    if (navItems[idx]) navItems[idx].classList.add('active');
-  }
-}
 
 // ─── SEARCH ───
 window.filterSearch = function(val) {
@@ -370,7 +377,7 @@ function renderSearchResults(techs, search = '', filter = '') {
   const el = document.getElementById('search-list');
   document.getElementById('search-loading').style.display = 'none';
 
-  let filtered = techs;
+  let filtered = [...techs];
   if (filter === 'online') filtered = filtered.filter(t => t.isOnline);
   else if (filter) filtered = filtered.filter(t => (t.speciality||'').toLowerCase().includes(filter.toLowerCase()));
 
@@ -392,9 +399,7 @@ function renderSearchResults(techs, search = '', filter = '') {
 // ─── DETAIL ───
 window.goDetail = async function(techId) {
   currentTechId = techId;
-  document.getElementById('detail-back-btn').onclick = () => {
-    showScreen('search');
-  };
+  document.getElementById('detail-back-btn').onclick = () => showScreen('search');
 
   const tech = allTechnicians.find(t => t.id === techId);
   if (!tech) return;
@@ -409,7 +414,6 @@ window.goDetail = async function(techId) {
   document.getElementById('d-jobs').textContent = tech.jobsCompleted || 0;
   document.getElementById('d-dist2').textContent = tech.dist ? tech.dist.toFixed(1) + ' km' : '—';
 
-  // WhatsApp button
   const btnWa = document.getElementById('btn-wa');
   if (tech.whatsapp) {
     btnWa.onclick = () => {
@@ -420,13 +424,12 @@ window.goDetail = async function(techId) {
       );
       window.open(link, '_blank');
     };
-    btnWa.disabled = !tech.isOnline;
-    btnWa.style.opacity = tech.isOnline ? '1' : '0.5';
-    btnWa.title = tech.isOnline ? '' : 'Teknisi sedang offline';
+    btnWa.disabled = false;
+    btnWa.style.opacity = '1';
   } else {
     btnWa.disabled = true;
     btnWa.style.opacity = '0.4';
-    btnWa.title = 'Nomor WhatsApp belum tersedia';
+    btnWa.onclick = () => toast('⚠️ Teknisi belum mengisi nomor WhatsApp.');
   }
 
   showScreen('detail');
@@ -435,60 +438,51 @@ window.goDetail = async function(techId) {
   setTimeout(() => {
     if (detailMap) { detailMap.remove(); detailMap = null; }
     const mapEl = document.getElementById('detail-map');
-
     let centerLat = userLat || -6.8924;
     let centerLng = userLng || 109.3753;
-
     if (tech.lat && tech.lng) {
       centerLat = (centerLat + tech.lat) / 2;
       centerLng = (centerLng + tech.lng) / 2;
     }
-
     detailMap = L.map('detail-map', { zoomControl: true }).setView([centerLat, centerLng], 13);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap contributors'
+      attribution: '© OpenStreetMap'
     }).addTo(detailMap);
 
-    // User marker
     if (userLat && userLng) {
       const userIcon = L.divIcon({
         html: `<div style="background:#ef4444;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.3)">🏫</div>`,
-        iconSize: [32, 32], iconAnchor: [16, 16], className: ''
+        iconSize: [32,32], iconAnchor: [16,16], className: ''
       });
-      L.marker([userLat, userLng], { icon: userIcon }).addTo(detailMap)
-        .bindPopup(`<b>Lokasi Anda</b>`);
+      L.marker([userLat, userLng], { icon: userIcon }).addTo(detailMap).bindPopup('Lokasi Anda');
     }
 
-    // Tech marker
     if (tech.lat && tech.lng) {
       const techIcon = L.divIcon({
         html: `<div style="background:#0ea874;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.3)">🔧</div>`,
-        iconSize: [36, 36], iconAnchor: [18, 18], className: ''
+        iconSize: [36,36], iconAnchor: [18,18], className: ''
       });
       L.marker([tech.lat, tech.lng], { icon: techIcon }).addTo(detailMap)
-        .bindPopup(`<b>${tech.name}</b><br>${tech.speciality}`)
-        .openPopup();
-
-      // Fit both markers
+        .bindPopup(`<b>${tech.name}</b>`).openPopup();
       if (userLat && userLng) {
-        detailMap.fitBounds([[userLat, userLng], [tech.lat, tech.lng]], { padding: [40, 40] });
+        detailMap.fitBounds([[userLat, userLng],[tech.lat, tech.lng]], { padding: [40,40] });
       }
     }
   }, 200);
 
-  // Load reviews
   loadReviews(techId);
 };
 
 async function loadReviews(techId) {
   const el = document.getElementById('reviews-list');
   try {
-    const q = query(collection(db, 'reviews'), where('techId', '==', techId), orderBy('createdAt', 'desc'), limit(5));
+    // Simple query without orderBy to avoid index issues
+    const q = query(collection(db, 'reviews'), where('techId', '==', techId));
     const snap = await getDocs(q);
     if (snap.empty) { el.innerHTML = '<p class="muted-text">Belum ada ulasan.</p>'; return; }
     el.innerHTML = snap.docs.map(d => {
       const r = d.data();
-      const stars = '★'.repeat(r.rating || 0) + '☆'.repeat(5 - (r.rating || 0));
+      const stars = '★'.repeat(r.rating||0) + '☆'.repeat(5-(r.rating||0));
       return `<div class="review-card">
         <div class="rv-head">
           <span class="rv-name">${escHtml(r.userName)}</span>
@@ -498,7 +492,7 @@ async function loadReviews(techId) {
       </div>`;
     }).join('');
   } catch {
-    el.innerHTML = '<p class="muted-text">Gagal memuat ulasan.</p>';
+    el.innerHTML = '<p class="muted-text">Belum ada ulasan.</p>';
   }
 }
 
@@ -506,35 +500,30 @@ async function loadReviews(techId) {
 window.openReport = function() {
   document.getElementById('report-modal').classList.add('open');
 };
-
 window.closeReport = function() {
   document.getElementById('report-modal').classList.remove('open');
 };
-
 window.submitReport = async function() {
   const type = document.getElementById('rep-type').value;
   const desc = document.getElementById('rep-desc').value.trim();
   const priority = document.querySelector('input[name="priority"]:checked').value;
-
   if (!currentTechId) return toast('⚠️ Pilih teknisi terlebih dahulu.');
-
   try {
     await addDoc(collection(db, 'reports'), {
       userId: currentUser.uid,
       userName: currentUserData?.name || 'Pengguna',
       userSchool: currentUserData?.school || '',
+      userWhatsapp: currentUserData?.whatsapp || '',
       techId: currentTechId,
-      type,
-      description: desc,
-      priority,
+      type, description: desc, priority,
       status: 'pending',
       createdAt: serverTimestamp()
     });
     closeReport();
     toast('✅ Laporan berhasil dikirim ke teknisi!');
     document.getElementById('rep-desc').value = '';
-  } catch (e) {
-    toast('❌ Gagal mengirim laporan. Coba lagi.');
+  } catch(e) {
+    toast('❌ Gagal mengirim laporan: ' + e.message);
   }
 };
 
@@ -542,38 +531,36 @@ window.submitReport = async function() {
 async function loadHistory() {
   const el = document.getElementById('history-list');
   try {
-    const q = query(
-      collection(db, 'reports'),
-      where('userId', '==', currentUser.uid),
-      orderBy('createdAt', 'desc')
-    );
+    // Simple query without orderBy
+    const q = query(collection(db, 'reports'), where('userId', '==', currentUser.uid));
     const snap = await getDocs(q);
     if (snap.empty) {
       el.innerHTML = `<div class="empty-state"><p>Belum ada laporan yang dibuat.</p></div>`;
       return;
     }
-    el.innerHTML = snap.docs.map(d => {
+    const docs = snap.docs.sort((a,b) => (b.data().createdAt?.seconds||0) - (a.data().createdAt?.seconds||0));
+    el.innerHTML = docs.map(d => {
       const r = d.data();
       const isDone = r.status === 'resolved';
-      const date = r.createdAt?.toDate?.()?.toLocaleDateString('id-ID', { day:'numeric', month:'short', year:'numeric' }) || '—';
+      const date = r.createdAt?.toDate?.()?.toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}) || '—';
       return `<div class="history-card">
         <div class="hc-icon ${isDone ? 'done' : 'pending'}">${isDone ? '✅' : '⏳'}</div>
         <div>
           <div class="hc-title">${escHtml(r.type)}</div>
-          <div class="hc-meta">${date} · ${r.priority === 'urgent' ? '🚨 Darurat' : 'Normal'}</div>
-          ${r.description ? `<div class="hc-meta">${escHtml(r.description.slice(0, 80))}${r.description.length > 80 ? '…' : ''}</div>` : ''}
+          <div class="hc-meta">${date} · ${r.priority==='urgent'?'🚨 Darurat':'Normal'}</div>
+          ${r.description ? `<div class="hc-meta">${escHtml(r.description.slice(0,80))}${r.description.length>80?'…':''}</div>` : ''}
         </div>
         <div class="hc-status">
-          <span class="badge ${isDone ? 'green' : 'orange'}">${isDone ? 'Selesai' : 'Proses'}</span>
+          <span class="badge ${isDone?'green':'orange'}">${isDone?'Selesai':'Proses'}</span>
         </div>
       </div>`;
     }).join('');
-  } catch (e) {
+  } catch(e) {
     el.innerHTML = `<div class="empty-state"><p>Gagal memuat riwayat.</p></div>`;
   }
 }
 
-// ─── TECHNICIAN DASHBOARD ───
+// ─── TECH DASHBOARD ───
 function initTechDashboard() {
   showScreen('tech-dashboard');
   document.getElementById('tech-greeting').textContent =
@@ -589,7 +576,6 @@ function initTechDashboard() {
 window.toggleOnlineStatus = async function(isOnline) {
   if (!currentUser) return;
   try {
-    // Update location if going online
     let locUpdate = {};
     if (isOnline && navigator.geolocation) {
       await new Promise(resolve => {
@@ -599,84 +585,77 @@ window.toggleOnlineStatus = async function(isOnline) {
         }, resolve, { timeout: 5000 });
       });
     }
-    await updateDoc(doc(db, 'users', currentUser.uid), {
-      isOnline,
-      ...locUpdate
-    });
+    await updateDoc(doc(db, 'users', currentUser.uid), { isOnline, ...locUpdate });
+    currentUserData.isOnline = isOnline;
     updateOnlineSubtext(isOnline);
-    toast(isOnline ? '🟢 Anda sekarang Online — siap menerima laporan!' : '⚫ Anda sekarang Offline');
-  } catch (e) {
+    toast(isOnline ? '🟢 Anda sekarang Online!' : '⚫ Anda sekarang Offline');
+  } catch(e) {
     toast('❌ Gagal mengubah status.');
   }
 };
 
 function updateOnlineSubtext(isOnline) {
   document.getElementById('ot-sub-text').innerHTML =
-    `Anda saat ini <strong style="color:${isOnline ? '#0ea874' : '#6b7280'}">${isOnline ? 'Online' : 'Offline'}</strong>`;
+    `Anda saat ini <strong style="color:${isOnline?'#0ea874':'#6b7280'}">${isOnline?'Online':'Offline'}</strong>`;
 }
 
 async function loadIncomingReports() {
   const el = document.getElementById('incoming-reports');
   if (!currentUser) return;
   try {
+    // Simple query without orderBy to avoid index
     const q = query(
       collection(db, 'reports'),
       where('techId', '==', currentUser.uid),
-      where('status', '==', 'pending'),
-      orderBy('createdAt', 'desc')
+      where('status', '==', 'pending')
     );
-    // Real-time listener
     onSnapshot(q, snap => {
       if (snap.empty) {
-        el.innerHTML = `<div class="empty-state"><p>Tidak ada laporan masuk saat ini.</p></div>`;
+        el.innerHTML = `<div class="empty-state"><p>Tidak ada laporan masuk saat ini.<br><small>Pastikan status Anda Online.</small></p></div>`;
         return;
       }
-      el.innerHTML = snap.docs.map(d => {
+      const docs = snap.docs.sort((a,b) => (b.data().createdAt?.seconds||0) - (a.data().createdAt?.seconds||0));
+      el.innerHTML = docs.map(d => {
         const r = d.data();
         const isUrgent = r.priority === 'urgent';
         return `<div class="incoming-card">
           <div class="ic-head">
             <div>
               <div class="ic-type">${escHtml(r.type)}</div>
-              <div class="ic-meta">Dari: ${escHtml(r.userName)} ${r.userSchool ? '· ' + escHtml(r.userSchool) : ''}</div>
-              ${r.description ? `<div class="ic-meta">${escHtml(r.description.slice(0,100))}</div>` : ''}
+              <div class="ic-meta">Dari: ${escHtml(r.userName)} ${r.userSchool?'· '+escHtml(r.userSchool):''}</div>
+              ${r.description?`<div class="ic-meta">${escHtml(r.description.slice(0,100))}</div>`:''}
             </div>
-            ${isUrgent ? `<span class="badge red ic-priority-badge">🚨 Darurat</span>` : ''}
+            ${isUrgent?`<span class="badge red ic-priority-badge">🚨 Darurat</span>`:''}
           </div>
-          <button class="btn-accept" onclick="acceptReport('${d.id}', '${escHtml(r.userName)}')">
+          <button class="btn-accept" onclick="acceptReport('${d.id}')">
             ✅ Terima & Hubungi via WhatsApp
           </button>
         </div>`;
       }).join('');
     });
-  } catch (e) {
+  } catch(e) {
     el.innerHTML = `<div class="empty-state"><p>Gagal memuat laporan.</p></div>`;
   }
 }
 
-window.acceptReport = async function(reportId, userName) {
+window.acceptReport = async function(reportId) {
   try {
-    await updateDoc(doc(db, 'reports', reportId), { status: 'accepted' });
-    // Find user's WA from report
     const repSnap = await getDoc(doc(db, 'reports', reportId));
     const repData = repSnap.data();
-    const userSnap = await getDoc(doc(db, 'users', repData.userId));
-    const userData = userSnap.data();
-    if (userData?.whatsapp) {
-      const clean = userData.whatsapp.replace(/[^0-9]/g, '').replace(/^0/, '62');
+    await updateDoc(doc(db, 'reports', reportId), { status: 'accepted' });
+
+    if (repData.userWhatsapp) {
+      const clean = repData.userWhatsapp.replace(/[^0-9]/g,'').replace(/^0/,'62');
       const msg = encodeURIComponent(
-        `Halo ${repData.userName}, saya ${currentUserData?.name || 'Teknisi'} dari TechniFind.\n\n` +
-        `Saya sudah menerima laporan Anda tentang: ${repData.type}.\n\n` +
-        `Saya segera menuju lokasi Anda. Mohon tunggu ya! 🔧`
+        `Halo ${repData.userName}, saya ${currentUserData?.name||'Teknisi'} dari TechniFind.\n\n` +
+        `Laporan Anda: "${repData.type}" sudah saya terima.\n` +
+        `Saya segera menuju lokasi Anda. Mohon tunggu! 🔧`
       );
       window.open(`https://wa.me/${clean}?text=${msg}`, '_blank');
     } else {
-      toast('⚠️ Laporan diterima! Nomor WA pengguna tidak tersedia.');
+      toast('✅ Laporan diterima! Hubungi pengguna secara langsung.');
     }
-  } catch (e) {
-    toast('❌ Gagal menerima laporan.');
+  } catch(e) {
+    toast('❌ Gagal menerima laporan: ' + e.message);
   }
 };
-
-// Expose goDetail & goHome globally
-window.goDetail = window.goDetail;
