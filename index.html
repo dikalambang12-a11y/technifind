@@ -1,347 +1,282 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>TechniFind — Teknisi Internet Terdekat</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔧</text></svg>">
-  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-  <link rel="stylesheet" href="src/style.css" />
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --green:#00c47d;--green-dark:#00a368;--green-glow:rgba(0,196,125,0.2);
+      --bg:#f0f4f0;--white:#ffffff;--text:#0d1f0f;--muted:#6b7a6d;
+      --border:#dde8dd;--shadow:0 2px 12px rgba(0,0,0,0.08);
+      --shadow-lg:0 8px 32px rgba(0,0,0,0.14);
+    }
+    html,body{height:100%;background:#e8ede8;font-family:'DM Sans',sans-serif;color:var(--text)}
+    button{cursor:pointer;font-family:inherit;border:none;outline:none}
+    input{font-family:inherit;outline:none}
+
+    /* APP */
+    .app{max-width:430px;margin:0 auto;height:100vh;position:relative;overflow:hidden;background:var(--bg)}
+
+    /* TOAST */
+    .toast{position:fixed;top:16px;left:50%;transform:translateX(-50%) translateY(-80px);background:#0d1f0f;color:#fff;border-radius:24px;padding:10px 20px;font-size:13px;z-index:9999;transition:transform .3s cubic-bezier(.34,1.56,.64,1);box-shadow:0 4px 20px rgba(0,0,0,.3);white-space:nowrap}
+    .toast.show{transform:translateX(-50%) translateY(0)}
+
+    /* SCREENS */
+    .screen{display:none;position:absolute;inset:0;flex-direction:column;background:var(--bg);overflow-y:auto}
+    .screen.active{display:flex}
+
+    /* ── MAIN MAP SCREEN ── */
+    #screen-map{display:none;position:absolute;inset:0;flex-direction:column}
+    #screen-map.active{display:flex}
+
+    .map-wrap{flex:1;position:relative}
+    #main-map{width:100%;height:100%}
+
+    /* TOP PILL */
+    .map-top{position:absolute;top:0;left:0;right:0;z-index:400;padding:12px 14px;display:flex;gap:8px;align-items:center}
+    .location-bar{flex:1;background:rgba(255,255,255,.95);backdrop-filter:blur(12px);border-radius:14px;padding:10px 14px;display:flex;align-items:center;gap:8px;box-shadow:var(--shadow-lg);cursor:pointer;border:1px solid var(--border)}
+    .location-bar span:first-child{font-size:16px}
+    .location-bar .loc-text{flex:1;font-size:13px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .location-bar .loc-refresh{color:var(--green);font-size:16px;font-weight:700}
+    .btn-tech-mode{background:rgba(255,255,255,.95);backdrop-filter:blur(12px);border-radius:14px;padding:10px 12px;font-size:11px;font-weight:600;color:var(--muted);box-shadow:var(--shadow-lg);border:1px solid var(--border);white-space:nowrap}
+
+    /* BOTTOM SHEET */
+    .bottom-sheet{position:absolute;bottom:0;left:0;right:0;z-index:400;background:var(--white);border-radius:24px 24px 0 0;box-shadow:0 -4px 32px rgba(0,0,0,.12);padding-bottom:env(safe-area-inset-bottom)}
+    .sheet-handle{width:36px;height:4px;background:var(--border);border-radius:4px;margin:12px auto 0}
+    .sheet-label{padding:10px 20px 4px;font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.5px;text-transform:uppercase}
+    .tech-scroll{display:flex;gap:10px;padding:8px 16px 16px;overflow-x:auto;scrollbar-width:none}
+    .tech-scroll::-webkit-scrollbar{display:none}
+
+    /* TECH CHIP CARD */
+    .tech-chip{flex-shrink:0;background:var(--bg);border:1.5px solid var(--border);border-radius:16px;padding:12px 14px;width:170px;cursor:pointer;transition:border-color .2s,transform .15s,box-shadow .2s;position:relative}
+    .tech-chip:hover,.tech-chip.selected{border-color:var(--green);box-shadow:0 4px 16px var(--green-glow);transform:translateY(-2px)}
+    .tc-top{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+    .tc-ava{width:36px;height:36px;border-radius:10px;background:var(--green-glow);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;position:relative}
+    .tc-status-dot{position:absolute;bottom:1px;right:1px;width:9px;height:9px;border-radius:50%;border:1.5px solid var(--white)}
+    .dot-on{background:#22c55e}.dot-off{background:#9ca3af}
+    .tc-name{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;line-height:1.2}
+    .tc-spec{font-size:11px;color:var(--muted);margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .tc-meta{display:flex;align-items:center;justify-content:space-between}
+    .tc-dist{font-size:12px;font-weight:700;color:var(--green)}
+    .tc-eta{font-size:10px;color:var(--muted)}
+    .tc-rating{font-size:11px;color:#f59e0b}
+
+    /* DETAIL PANEL */
+    .detail-panel{position:absolute;bottom:0;left:0;right:0;z-index:500;background:var(--white);border-radius:24px 24px 0 0;box-shadow:0 -8px 40px rgba(0,0,0,.18);transform:translateY(100%);transition:transform .35s cubic-bezier(.34,1.2,.64,1);padding-bottom:env(safe-area-inset-bottom)}
+    .detail-panel.open{transform:translateY(0)}
+    .dp-handle{width:36px;height:4px;background:var(--border);border-radius:4px;margin:12px auto 0}
+    .dp-close{position:absolute;top:14px;right:16px;width:30px;height:30px;border-radius:50%;background:var(--bg);color:var(--muted);font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+    .dp-body{padding:16px 20px 20px}
+    .dp-head{display:flex;gap:14px;align-items:flex-start;margin-bottom:16px}
+    .dp-avatar{width:60px;height:60px;border-radius:16px;background:var(--green-glow);display:flex;align-items:center;justify-content:center;font-size:28px;flex-shrink:0;position:relative}
+    .dp-name{font-family:'Syne',sans-serif;font-size:20px;font-weight:800;line-height:1.1;margin-bottom:3px}
+    .dp-spec{font-size:13px;color:var(--muted);margin-bottom:8px}
+    .dp-badges{display:flex;flex-wrap:wrap;gap:5px}
+    .badge{font-size:10px;font-weight:600;padding:3px 8px;border-radius:6px}
+    .badge-green{background:rgba(34,197,94,.1);color:#16a34a}
+    .badge-blue{background:rgba(59,130,246,.1);color:#2563eb}
+    .badge-gray{background:var(--bg);color:var(--muted)}
+    .badge-red{background:rgba(239,68,68,.1);color:#dc2626}
+    .dp-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px}
+    .dp-stat{background:var(--bg);border-radius:12px;padding:12px;text-align:center}
+    .dp-stat-val{font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:var(--green)}
+    .dp-stat-key{font-size:10px;color:var(--muted);margin-top:2px}
+    .btn-wa{width:100%;display:flex;align-items:center;justify-content:center;gap:10px;padding:16px;background:#25d366;color:#fff;border-radius:14px;font-family:'Syne',sans-serif;font-size:16px;font-weight:700;transition:background .2s,transform .15s;box-shadow:0 4px 20px rgba(37,211,102,.3)}
+    .btn-wa:hover{background:#1fb855;transform:translateY(-2px)}
+    .btn-wa:active{transform:translateY(0)}
+    .btn-wa:disabled{background:#9ca3af;box-shadow:none;cursor:not-allowed;transform:none}
+    .dp-offline-note{text-align:center;font-size:12px;color:var(--muted);margin-top:8px}
+
+    /* TECH LOGIN SCREEN */
+    #screen-techlogin{background:#0a1a0c}
+    .tl-back{position:absolute;top:20px;left:16px;z-index:10;width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.1);color:#fff;font-size:18px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+    .tl-body{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 28px 40px;min-height:100vh}
+    .tl-logo{font-family:'Syne',sans-serif;font-size:28px;font-weight:800;color:#fff;margin-bottom:4px}.tl-logo span{color:var(--green)}
+    .tl-sub{font-size:13px;color:rgba(255,255,255,.5);margin-bottom:32px;text-align:center}
+    .tl-tabs{display:flex;background:rgba(255,255,255,.07);border-radius:10px;padding:3px;margin-bottom:20px;width:100%}
+    .tl-tab{flex:1;padding:9px;background:none;border:none;color:rgba(255,255,255,.4);font-size:13px;font-weight:500;border-radius:8px;transition:all .2s}
+    .tl-tab.active{background:rgba(255,255,255,.12);color:#fff}
+    .tl-form{display:none;flex-direction:column;gap:12px;width:100%}
+    .tl-form.active{display:flex}
+    .tl-field{display:flex;flex-direction:column;gap:5px}
+    .tl-field label{font-size:11px;font-weight:600;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.5px}
+    .tl-field input,.tl-field select{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:12px 14px;color:#fff;font-size:14px;transition:border-color .2s}
+    .tl-field input:focus,.tl-field select:focus{border-color:var(--green)}
+    .tl-field input::placeholder{color:rgba(255,255,255,.25)}
+    .tl-field select option{background:#1a2e1c;color:#fff}
+    .btn-tl-submit{padding:14px;background:var(--green);color:#fff;border-radius:10px;font-family:'Syne',sans-serif;font-size:15px;font-weight:700;transition:background .2s,transform .15s;margin-top:4px}
+    .btn-tl-submit:hover{background:var(--green-dark);transform:translateY(-1px)}
+
+    /* TECH DASHBOARD */
+    #screen-techdash{background:var(--bg)}
+    .td-topbar{background:var(--white);padding:20px 20px 14px;border-bottom:1px solid var(--border);flex-shrink:0}
+    .td-logo{font-family:'Syne',sans-serif;font-size:18px;font-weight:800}.td-logo span{color:var(--green)}
+    .td-greeting{font-size:12px;color:var(--muted);margin-top:1px}
+    .td-topbar-row{display:flex;align-items:center;justify-content:space-between}
+    .td-logout{font-size:12px;color:var(--muted);padding:6px 12px;background:var(--bg);border-radius:8px;border:1px solid var(--border)}
+    .td-body{padding:16px;display:flex;flex-direction:column;gap:12px;overflow-y:auto;padding-bottom:30px}
+    .toggle-card{background:var(--white);border-radius:16px;padding:16px;display:flex;align-items:center;justify-content:space-between;border:1px solid var(--border);box-shadow:var(--shadow)}
+    .toggle-title{font-family:'Syne',sans-serif;font-size:15px;font-weight:700}
+    .toggle-sub{font-size:12px;color:var(--muted);margin-top:2px}
+    .toggle-switch{position:relative;width:50px;height:26px;flex-shrink:0}
+    .toggle-switch input{opacity:0;width:0;height:0}
+    .toggle-slider{position:absolute;inset:0;background:var(--border);border-radius:26px;cursor:pointer;transition:background .3s}
+    .toggle-slider::before{content:'';position:absolute;width:20px;height:20px;border-radius:50%;background:#fff;top:3px;left:3px;transition:transform .3s;box-shadow:0 2px 4px rgba(0,0,0,.2)}
+    input:checked+.toggle-slider{background:var(--green)}
+    input:checked+.toggle-slider::before{transform:translateX(24px)}
+    .section-title{font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:var(--text)}
+    .report-card{background:var(--white);border-radius:14px;padding:14px;border:1px solid var(--border);box-shadow:var(--shadow);display:flex;flex-direction:column;gap:10px}
+    .rc-type{font-size:14px;font-weight:600}
+    .rc-from{font-size:12px;color:var(--muted)}
+    .rc-urgent{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;background:rgba(239,68,68,.1);color:#dc2626;padding:3px 8px;border-radius:6px}
+    .btn-accept{padding:11px;background:var(--green);color:#fff;border-radius:10px;font-family:'Syne',sans-serif;font-size:14px;font-weight:700;transition:background .2s}
+    .btn-accept:hover{background:var(--green-dark)}
+    .empty-box{background:var(--white);border-radius:14px;padding:30px 20px;text-align:center;color:var(--muted);font-size:13px;border:1px solid var(--border)}
+
+    /* LEAFLET CUSTOM */
+    .leaflet-container{font-family:'DM Sans',sans-serif}
+    .custom-marker{display:flex;align-items:center;justify-content:center;border-radius:50%;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.25);cursor:pointer;transition:transform .2s}
+    .custom-marker:hover{transform:scale(1.15)}
+    .marker-online{background:var(--green)}
+    .marker-offline{background:#9ca3af}
+    .marker-user{background:#ef4444}
+  </style>
 </head>
 <body>
-
-<!-- ░░░░ TOAST ░░░░ -->
 <div id="toast" class="toast"></div>
+<div class="app">
 
-<!-- ░░░░ APP SHELL ░░░░ -->
-<div class="app" id="app">
+  <!-- ══ MAP SCREEN (halaman utama guru) ══ -->
+  <div class="screen active" id="screen-map">
+    <div class="map-wrap">
+      <div id="main-map"></div>
 
-  <!-- ══ AUTH SCREEN ══ -->
-  <div class="screen active" id="screen-auth">
-    <div class="auth-bg">
-      <div class="auth-orb orb1"></div>
-      <div class="auth-orb orb2"></div>
-    </div>
-    <div class="auth-content">
-      <div class="auth-logo">Techni<span>Find</span></div>
-      <p class="auth-tagline">Temukan Teknisi Internet<br>Terdekat di Sekitar Anda</p>
-      <div class="auth-tabs">
-        <button class="tab-btn active" onclick="switchAuthTab('login')">Masuk</button>
-        <button class="tab-btn" onclick="switchAuthTab('register')">Daftar</button>
+      <!-- Top bar -->
+      <div class="map-top">
+        <div class="location-bar" onclick="detectLocation()">
+          <span>📍</span>
+          <span class="loc-text" id="loc-text">Ketuk untuk deteksi lokasi Anda</span>
+          <span class="loc-refresh">↻</span>
+        </div>
+        <button class="btn-tech-mode" onclick="goTechLogin()">🔧 Teknisi</button>
       </div>
 
-      <!-- LOGIN -->
-      <div id="auth-login" class="auth-form active">
-        <div class="field-group">
-          <label>Email</label>
-          <input type="email" id="login-email" placeholder="email@sekolah.com" />
-        </div>
-        <div class="field-group">
-          <label>Password</label>
-          <input type="password" id="login-pass" placeholder="••••••••" />
-        </div>
-        <button class="btn-primary" onclick="loginUser()">Masuk</button>
-        <div class="or-divider"><span>atau</span></div>
-        <button class="btn-google" onclick="loginGoogle()">
-          <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
-          Masuk dengan Google
-        </button>
-      </div>
-
-      <!-- REGISTER -->
-      <div id="auth-register" class="auth-form">
-        <div class="role-select">
-          <div class="role-card active" id="role-user" onclick="selectRole('user')">
-            <div class="role-icon">👩‍🏫</div>
-            <div class="role-label">Guru / Staff</div>
-          </div>
-          <div class="role-card" id="role-tech" onclick="selectRole('tech')">
-            <div class="role-icon">🔧</div>
-            <div class="role-label">Teknisi</div>
+      <!-- Bottom sheet daftar teknisi -->
+      <div class="bottom-sheet">
+        <div class="sheet-handle"></div>
+        <div class="sheet-label" id="sheet-label">Mencari teknisi...</div>
+        <div class="tech-scroll" id="tech-scroll">
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 4px;color:#9ca3af;font-size:13px">
+            <div style="width:20px;height:20px;border:2px solid #00c47d;border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite"></div>
+            Mendeteksi lokasi...
           </div>
         </div>
-        <div class="field-group">
-          <label>Nama Lengkap</label>
-          <input type="text" id="reg-name" placeholder="Nama lengkap" />
-        </div>
-        <div class="field-group">
-          <label>Email</label>
-          <input type="email" id="reg-email" placeholder="email@sekolah.com" />
-        </div>
-        <div class="field-group">
-          <label>No. WhatsApp</label>
-          <input type="tel" id="reg-wa" placeholder="08xxxxxxxxxx" />
-        </div>
-        <div class="field-group" id="field-speciality" style="display:none">
-          <label>Keahlian</label>
-          <select id="reg-spec">
-            <option value="">Pilih keahlian...</option>
-            <option>Fiber Optic</option>
-            <option>WiFi & Wireless</option>
-            <option>Router & Switch</option>
-            <option>ISP Specialist</option>
-            <option>LAN & Cabling</option>
-            <option>Umum (semua jaringan)</option>
-          </select>
-        </div>
-        <div class="field-group">
-          <label>Password</label>
-          <input type="password" id="reg-pass" placeholder="Min. 6 karakter" />
-        </div>
-        <button class="btn-primary" onclick="registerUser()">Buat Akun</button>
       </div>
-    </div>
-  </div>
 
-  <!-- ══ HOME SCREEN (USER) ══ -->
-  <div class="screen" id="screen-home">
-    <div class="top-bar">
-      <div>
-        <div class="top-logo">Techni<span>Find</span></div>
-        <div class="top-sub" id="home-greeting">Selamat datang 👋</div>
-      </div>
-      <div class="avatar-btn" onclick="goProfile()" id="user-avatar-btn">👩‍🏫</div>
-    </div>
-
-    <div class="location-pill" id="location-pill" onclick="detectLocation()">
-      <span>📍</span>
-      <span id="location-text">Deteksi lokasi Anda...</span>
-      <span class="loc-refresh">↻</span>
-    </div>
-
-    <div class="hero-section">
-      <h1 class="hero-title">Koneksi Internet<br><em>Bermasalah?</em></h1>
-      <p class="hero-sub">Temukan teknisi terpercaya di sekitar Anda dalam hitungan detik.</p>
-    </div>
-
-    <div class="quick-actions">
-      <button class="qa-btn primary" onclick="goSearch()">
-        🔍 Cari Teknisi
-      </button>
-      <button class="qa-btn danger" onclick="goSearch('darurat')">
-        🚨 Darurat
-      </button>
-    </div>
-
-    <div class="stats-row">
-      <div class="stat-pill"><span id="stat-online">—</span> teknisi online</div>
-      <div class="stat-pill">rata-rata <span id="stat-eta">—</span> mnt tiba</div>
-    </div>
-
-    <div class="section-head">
-      <h2>Teknisi Terdekat</h2>
-      <a onclick="goSearch()">Semua →</a>
-    </div>
-
-    <div id="nearby-list" class="tech-list">
-      <div class="skeleton-card"></div>
-      <div class="skeleton-card"></div>
-    </div>
-
-    <div class="bottom-nav">
-      <div class="nav-item active" onclick="goHome()">🏠<span>Beranda</span></div>
-      <div class="nav-item" onclick="goSearch()">🔍<span>Cari</span></div>
-      <div class="nav-item" onclick="goHistory()">📋<span>Riwayat</span></div>
-      <div class="nav-item" onclick="goProfile()">👤<span>Profil</span></div>
-    </div>
-  </div>
-
-  <!-- ══ SEARCH SCREEN ══ -->
-  <div class="screen" id="screen-search">
-    <div class="search-bar">
-      <button class="back-btn" onclick="goHome()">←</button>
-      <input id="search-input" type="text" placeholder="Cari nama atau keahlian..." oninput="filterSearch(this.value)" />
-    </div>
-
-    <div class="chips-row">
-      <div class="chip active" onclick="chipFilter(this,'')">Semua</div>
-      <div class="chip" onclick="chipFilter(this,'online')">🟢 Online</div>
-      <div class="chip" onclick="chipFilter(this,'Fiber Optic')">Fiber</div>
-      <div class="chip" onclick="chipFilter(this,'WiFi')">WiFi</div>
-      <div class="chip" onclick="chipFilter(this,'Router')">Router</div>
-      <div class="chip" onclick="chipFilter(this,'ISP')">ISP</div>
-    </div>
-
-    <div id="search-list" class="tech-list" style="padding-bottom:80px">
-      <div class="empty-state" id="search-loading">
-        <div class="radar-anim"></div>
-        <p>Mencari teknisi di sekitar Anda...</p>
-      </div>
-    </div>
-
-    <div class="bottom-nav">
-      <div class="nav-item" onclick="goHome()">🏠<span>Beranda</span></div>
-      <div class="nav-item active" onclick="goSearch()">🔍<span>Cari</span></div>
-      <div class="nav-item" onclick="goHistory()">📋<span>Riwayat</span></div>
-      <div class="nav-item" onclick="goProfile()">👤<span>Profil</span></div>
-    </div>
-  </div>
-
-  <!-- ══ DETAIL SCREEN ══ -->
-  <div class="screen" id="screen-detail">
-    <div class="detail-top-bar">
-      <button class="back-btn" id="detail-back-btn">←</button>
-      <span>Detail Teknisi</span>
-      <div style="width:36px"></div>
-    </div>
-
-    <div class="scroll-body">
-      <div id="detail-map" style="height:200px;width:100%;border-radius:0"></div>
-
-      <div class="detail-card">
-        <div class="detail-head">
-          <div class="detail-avatar" id="d-emoji">🔧</div>
-          <div class="detail-info">
-            <div class="detail-name" id="d-name">—</div>
-            <div class="detail-spec" id="d-spec">—</div>
-            <div class="detail-badges">
-              <span class="badge green" id="d-status-badge">● Online</span>
-              <span class="badge blue" id="d-eta-badge">⚡ — mnt</span>
-              <span class="badge gray" id="d-dist-badge">📍 — km</span>
+      <!-- Detail panel -->
+      <div class="detail-panel" id="detail-panel">
+        <div class="dp-handle"></div>
+        <div class="dp-close" onclick="closeDetail()">✕</div>
+        <div class="dp-body">
+          <div class="dp-head">
+            <div class="dp-avatar" id="dp-avatar">🔧</div>
+            <div>
+              <div class="dp-name" id="dp-name">—</div>
+              <div class="dp-spec" id="dp-spec">—</div>
+              <div class="dp-badges" id="dp-badges"></div>
             </div>
           </div>
-        </div>
-
-        <div class="detail-stats">
-          <div class="ds"><div class="ds-val" id="d-rating">—</div><div class="ds-key">Rating</div></div>
-          <div class="ds"><div class="ds-val" id="d-jobs">—</div><div class="ds-key">Selesai</div></div>
-          <div class="ds"><div class="ds-val" id="d-dist2">—</div><div class="ds-key">Jarak</div></div>
-        </div>
-
-        <div class="action-row">
-          <button class="btn-wa" id="btn-wa">
+          <div class="dp-stats">
+            <div class="dp-stat"><div class="dp-stat-val" id="dp-rating">—</div><div class="dp-stat-key">Rating</div></div>
+            <div class="dp-stat"><div class="dp-stat-val" id="dp-jobs">—</div><div class="dp-stat-key">Selesai</div></div>
+            <div class="dp-stat"><div class="dp-stat-val" id="dp-dist">—</div><div class="dp-stat-key">Jarak</div></div>
+          </div>
+          <button class="btn-wa" id="dp-wa-btn">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.118 1.528 5.855L.057 23.886a.5.5 0 00.611.611l6.031-1.471A11.946 11.946 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.885 0-3.65-.502-5.177-1.378l-.371-.215-3.839.936.952-3.837-.232-.384A9.96 9.96 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>
             Hubungi via WhatsApp
           </button>
-        </div>
-        <div class="action-row" style="margin-top:8px">
-          <button class="btn-report" onclick="openReport()">📋 Buat Laporan Gangguan</button>
-        </div>
-      </div>
-
-      <div class="reviews-section">
-        <h3>Ulasan Pengguna</h3>
-        <div id="reviews-list"><p class="muted-text">Belum ada ulasan.</p></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ══ REPORT MODAL ══ -->
-  <div class="modal-overlay" id="report-modal">
-    <div class="modal-box">
-      <div class="modal-head">
-        <h3>📋 Laporan Gangguan</h3>
-        <button onclick="closeReport()">✕</button>
-      </div>
-      <div class="field-group">
-        <label>Jenis Gangguan</label>
-        <select id="rep-type">
-          <option>Internet lambat / tidak stabil</option>
-          <option>WiFi putus total</option>
-          <option>Router tidak berfungsi</option>
-          <option>Kabel LAN rusak</option>
-          <option>DNS / IP bermasalah</option>
-          <option>Lainnya</option>
-        </select>
-      </div>
-      <div class="field-group">
-        <label>Keterangan</label>
-        <textarea id="rep-desc" placeholder="Ceritakan masalah internet Anda..." rows="3"></textarea>
-      </div>
-      <div class="field-group">
-        <label>Prioritas</label>
-        <div style="display:flex;gap:8px">
-          <label class="radio-opt"><input type="radio" name="priority" value="normal" checked> Normal</label>
-          <label class="radio-opt"><input type="radio" name="priority" value="urgent"> 🚨 Darurat</label>
-        </div>
-      </div>
-      <button class="btn-primary" onclick="submitReport()">Kirim Laporan</button>
-    </div>
-  </div>
-
-  <!-- ══ HISTORY SCREEN ══ -->
-  <div class="screen" id="screen-history">
-    <div class="top-bar">
-      <div class="top-logo">Riwayat</div>
-    </div>
-    <div id="history-list" class="history-list" style="padding-bottom:80px">
-      <div class="empty-state"><p>Memuat riwayat...</p></div>
-    </div>
-    <div class="bottom-nav">
-      <div class="nav-item" onclick="goHome()">🏠<span>Beranda</span></div>
-      <div class="nav-item" onclick="goSearch()">🔍<span>Cari</span></div>
-      <div class="nav-item active" onclick="goHistory()">📋<span>Riwayat</span></div>
-      <div class="nav-item" onclick="goProfile()">👤<span>Profil</span></div>
-    </div>
-  </div>
-
-  <!-- ══ TECHNICIAN DASHBOARD ══ -->
-  <div class="screen" id="screen-tech-dashboard">
-    <div class="top-bar">
-      <div>
-        <div class="top-logo">Dashboard <span>Teknisi</span></div>
-        <div class="top-sub" id="tech-greeting">Halo!</div>
-      </div>
-      <div class="avatar-btn" onclick="goProfile()">🔧</div>
-    </div>
-
-    <div class="online-toggle-card">
-      <div>
-        <div class="ot-title">Status Ketersediaan</div>
-        <div class="ot-sub" id="ot-sub-text">Anda saat ini <strong>Offline</strong></div>
-      </div>
-      <label class="toggle-switch">
-        <input type="checkbox" id="online-toggle" onchange="toggleOnlineStatus(this.checked)">
-        <span class="toggle-slider"></span>
-      </label>
-    </div>
-
-    <div class="stats-row" style="margin:0 16px">
-      <div class="stat-pill">⭐ <span id="tech-rating-display">—</span></div>
-      <div class="stat-pill">✅ <span id="tech-jobs-display">—</span> selesai</div>
-    </div>
-
-    <div class="section-head" style="margin-top:16px">
-      <h2>Laporan Masuk</h2>
-    </div>
-    <div id="incoming-reports" class="tech-list" style="padding-bottom:80px">
-      <div class="empty-state"><p>Belum ada laporan masuk.</p></div>
-    </div>
-
-    <div class="bottom-nav">
-      <div class="nav-item active">🏠<span>Dashboard</span></div>
-      <div class="nav-item" onclick="goProfile()">👤<span>Profil</span></div>
-    </div>
-  </div>
-
-  <!-- ══ PROFILE SCREEN ══ -->
-  <div class="screen" id="screen-profile">
-    <div class="top-bar">
-      <button class="back-btn" id="profile-back">←</button>
-      <div class="top-logo">Profil</div>
-      <div style="width:36px"></div>
-    </div>
-    <div class="profile-body">
-      <div class="profile-hero">
-        <div class="profile-avatar" id="profile-ava">👩‍🏫</div>
-        <div class="profile-name" id="profile-name">—</div>
-        <div class="profile-role" id="profile-role">—</div>
-      </div>
-      <div class="menu-list">
-        <div class="menu-item" onclick="logout()">
-          <span>🚪</span><span class="menu-label">Keluar</span><span>›</span>
+          <p class="dp-offline-note" id="dp-offline-note" style="display:none">⚠️ Teknisi sedang offline — coba hubungi tetap mungkin tersedia</p>
         </div>
       </div>
     </div>
   </div>
 
-</div><!-- /app -->
+  <!-- ══ TECH LOGIN SCREEN ══ -->
+  <div class="screen" id="screen-techlogin">
+    <div class="tl-back" onclick="goHome()">←</div>
+    <div class="tl-body">
+      <div class="tl-logo">Techni<span>Find</span></div>
+      <div class="tl-sub">Portal Khusus Teknisi</div>
+      <div class="tl-tabs">
+        <button class="tl-tab active" onclick="switchTLTab('login')">Masuk</button>
+        <button class="tl-tab" onclick="switchTLTab('daftar')">Daftar</button>
+      </div>
 
-<!-- Firebase SDKs -->
+      <!-- Login -->
+      <div class="tl-form active" id="tl-login">
+        <div class="tl-field"><label>Email</label><input type="email" id="tl-email" placeholder="email@kamu.com"/></div>
+        <div class="tl-field"><label>Password</label><input type="password" id="tl-pass" placeholder="••••••••"/></div>
+        <button class="btn-tl-submit" onclick="techLogin()">Masuk</button>
+      </div>
+
+      <!-- Daftar -->
+      <div class="tl-form" id="tl-daftar">
+        <div class="tl-field"><label>Nama Lengkap</label><input type="text" id="tl-name" placeholder="Nama kamu"/></div>
+        <div class="tl-field"><label>No. WhatsApp Aktif</label><input type="tel" id="tl-wa" placeholder="08xxxxxxxxxx"/></div>
+        <div class="tl-field"><label>Keahlian</label>
+          <select id="tl-spec">
+            <option value="">Pilih keahlian...</option>
+            <option>Fiber Optic</option><option>WiFi & Wireless</option>
+            <option>Router & Switch</option><option>ISP Specialist</option>
+            <option>LAN & Cabling</option><option>Umum (semua jaringan)</option>
+          </select>
+        </div>
+        <div class="tl-field"><label>Email</label><input type="email" id="tl-reg-email" placeholder="email@kamu.com"/></div>
+        <div class="tl-field"><label>Password</label><input type="password" id="tl-reg-pass" placeholder="Min. 6 karakter"/></div>
+        <button class="btn-tl-submit" onclick="techRegister()">Buat Akun Teknisi</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ TECH DASHBOARD ══ -->
+  <div class="screen" id="screen-techdash">
+    <div class="td-topbar">
+      <div class="td-topbar-row">
+        <div>
+          <div class="td-logo">Techni<span>Find</span></div>
+          <div class="td-greeting" id="td-greeting">Dashboard Teknisi</div>
+        </div>
+        <button class="td-logout" onclick="techLogout()">Keluar</button>
+      </div>
+    </div>
+    <div class="td-body">
+      <div class="toggle-card">
+        <div>
+          <div class="toggle-title">Status Ketersediaan</div>
+          <div class="toggle-sub" id="toggle-sub">Anda <strong>Offline</strong></div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="online-toggle" onchange="setOnlineStatus(this.checked)">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="section-title">📥 Laporan Masuk</div>
+      <div id="incoming-list"><div class="empty-box">Belum ada laporan masuk.<br>Aktifkan status Online untuk mulai menerima.</div></div>
+    </div>
+  </div>
+
+</div>
+
+<style>
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script type="module" src="src/app.js"></script>
-
 </body>
 </html>
