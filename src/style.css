@@ -74,10 +74,14 @@ input, select, textarea {
 .toast.show { transform: translateX(-50%) translateY(0); }
 
 /* ── AUTH SCREEN ── */
+/* FIX: jangan set `display` di sini — biarkan rule generik `.screen` / `.screen.active`
+   yang ngurus visibility. Sebelumnya `display: flex` di sini (ID specificity = 100)
+   override `.screen { display: none }` (class specificity = 10), jadi auth screen
+   nggak pernah ke-hide setelah login berhasil. */
 #screen-auth {
   background: #0a0f1e;
   position: relative;
-  display: flex; flex-direction: column;
+  flex-direction: column;
   align-items: center; justify-content: center;
   padding: 40px 24px;
   min-height: 100vh;
